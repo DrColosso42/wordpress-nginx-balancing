@@ -40,7 +40,7 @@ services:
       - ./mysql/master/init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
       - db-master-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -70,7 +70,7 @@ services:
       - ./mysql/slave/replica-setup.sh:/docker-entrypoint-initdb.d/99-replica.sh:ro
       - db-slave-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -80,7 +80,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
 
 
   wp1:
