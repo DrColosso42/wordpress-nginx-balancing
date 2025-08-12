@@ -1,0 +1,149 @@
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    depends_on:
+      - wp1
+      - wp2
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx-cache:/var/cache/nginx
+    healthcheck:
+      test: ["CMD-SHELL", "apk add --no-cache curl > /dev/null 2>&1 && curl -f http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  db-master:
+    image: percona:8
+    container_name: db-master
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    command: >
+        mysqld --server-id=1
+               --log-bin=mysql-bin
+               --binlog-do-db=${MYSQL_DATABASE}
+    volumes:
+      - ./mysql/master/init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+      - db-master-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  db-slave:
+    image: percona:8
+    container_name: db-slave
+    depends_on:
+      - db-master
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      REPL_USER: ${REPL_USER}
+      REPL_PASS: ${REPL_PASS}
+      MASTER_HOST: db-master
+    command: >
+        mysqld --server-id=2
+               --read-only=ON
+               --relay-log=mysqld-relay-bin
+    volumes:
+      - ./mysql/slave/init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+      - ./mysql/slave/replica-setup.sh:/docker-entrypoint-initdb.d/99-replica.sh:ro
+      - db-slave-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+
+  wp1:
+    image: wordpress:php8.2-apache
+    container_name: wp1
+    depends_on:
+      - db-master
+    environment:
+      WORDPRESS_DB_HOST: db-master
+      WORDPRESS_DB_USER: ${MYSQL_USER}
+      WORDPRESS_DB_PASSWORD: ${MYSQL_PASSWORD}
+      WORDPRESS_DB_NAME: ${MYSQL_DATABASE}
+      WORDPRESS_TABLE_PREFIX: ${WORDPRESS_TABLE_PREFIX}
+      WP_HOME: ${WP_HOME}
+      WP_SITEURL: ${WP_SITEURL}
+    volumes:
+        - wp-html:/var/www/html
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost/wp-login.php || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  wp2:
+    image: wordpress:php8.2-apache
+    container_name: wp2
+    depends_on:
+      - db-master
+    environment:
+      WORDPRESS_DB_HOST: db-master
+      WORDPRESS_DB_USER: ${MYSQL_USER}
+      WORDPRESS_DB_PASSWORD: ${MYSQL_PASSWORD}
+      WORDPRESS_DB_NAME: ${MYSQL_DATABASE}
+      WORDPRESS_TABLE_PREFIX: ${WORDPRESS_TABLE_PREFIX}
+      WP_HOME: ${WP_HOME}
+      WP_SITEURL: ${WP_SITEURL}
+    volumes:
+      - wp-html:/var/www/html
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost/wp-login.php || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+
+
+volumes:
+  nginx-cache:
+  db-master-data:
+  db-slave-data:
+  wp-html:
+
+
