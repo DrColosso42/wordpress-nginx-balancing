@@ -51,7 +51,37 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  proxysql:
+    image: proxysql/proxysql:2.6.0
+    container_name: proxysql
+    depends_on:
+      - db-master
+      - db-slave
+    ports:
+      - "6033:6033"
+      - "6032:6032"   
+    environment:
+      MONITOR_USER: ${MONITOR_USER}
+      MONITOR_PASS: ${MONITOR_PASS}
+      WP_DB_USER: ${MYSQL_USER}
+      WP_DB_PASS: ${MYSQL_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MASTER_HOST: db-master
+      SLAVE_HOST: db-slave
+    volumes:
+      - proxysql-data:/var/lib/proxysql
+      - ./scripts:/bootstrap:ro
+    command: ["/bin/sh", "-lc", "/bootstrap/proxysql-start.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -P6033 --silent || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
   db-slave:
+
     image: percona:8
     container_name: db-slave
     depends_on:
@@ -87,8 +117,9 @@ services:
     container_name: wp1
     depends_on:
       - db-master
+      - proxysql
     environment:
-      WORDPRESS_DB_HOST: db-master
+      WORDPRESS_DB_HOST: proxysql:6033
       WORDPRESS_DB_USER: ${MYSQL_USER}
       WORDPRESS_DB_PASSWORD: ${MYSQL_PASSWORD}
       WORDPRESS_DB_NAME: ${MYSQL_DATABASE}
@@ -113,9 +144,10 @@ services:
     image: wordpress:php8.2-apache
     container_name: wp2
     depends_on:
+      - proxysql
       - db-master
     environment:
-      WORDPRESS_DB_HOST: db-master
+      WORDPRESS_DB_HOST: proxysql:6033
       WORDPRESS_DB_USER: ${MYSQL_USER}
       WORDPRESS_DB_PASSWORD: ${MYSQL_PASSWORD}
       WORDPRESS_DB_NAME: ${MYSQL_DATABASE}
@@ -144,5 +176,5 @@ volumes:
   db-master-data:
   db-slave-data:
   wp-html:
-
+  proxysql-data:
 
